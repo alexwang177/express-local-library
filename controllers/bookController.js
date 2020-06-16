@@ -99,6 +99,9 @@ exports.book_create_post = [
             else
                 req.body.genre = new Array(req.body.genre)
         }
+
+        console.log("req.body.genre is " + req.body.genre)
+
         next()
     },
 
@@ -109,9 +112,65 @@ exports.book_create_post = [
     body('isbn', 'ISBN must not be empty').trim().isLength({ min: 1 }),
 
     // Sanitize fields (using wildcard).
-    sanitizeBody('*').escape(),
+    //sanitizeBody('*').escape(),
+
+    //sanitizeBody('genre.*').escape(),
 
     // Process request after validation and santization
+    (req, res, next) => {
+
+        console.log(req.body.genre)
+
+        // Extract validation errors from request
+        const errors = validationResult(req)
+
+        // Create a Book object with escaped and trimmed data
+        var book = new Book(
+            { title: req.body.title,
+              author: req.body.author,
+              summary: req.body.summary,
+              isbn: req.body.isbn,
+              genre: req.body.genre
+             })
+
+        if(!errors.isEmpty()) {
+            // There are errors. Render form again with sanitized values/error messages.
+
+            // Get all authors and genres for form
+            async.parallel({
+                authors: function(callback) {
+                    Author.find(callback)
+                },
+                genres: function(callback) {
+                    Genre.find(callback)
+                },
+            }, function(err, results) {
+                if(err) return next(err)
+
+                // Mark our selected genres as checked
+                for(let i = 0; i < results.genres.length; i++) {
+                    if(book.genre.indexOf(results.genres[i]._id) > -1) {
+                        results.genres[i].checked = 'true'
+                    }
+                }
+
+                res.render('book_form', { title: 'Create Book', authors: results.authors, genres: results.genres, book: book, errors: errors.array() })
+            })
+
+            return
+        }
+        else {
+            console.log(req.body.genre)
+            console.log(book.genre)
+
+            // Data from form is valid. Save Book
+            book.save(function(err) {
+                if(err) return next(err)
+
+                res.redirect(book.url)
+            })
+        }
+    }
 ]
 
 // Display book delete form on GET.
