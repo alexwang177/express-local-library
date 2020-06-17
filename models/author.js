@@ -35,6 +35,9 @@ AuthorSchema
 AuthorSchema
     .virtual("lifespan")
     .get(function() {
+        if(this.date_of_birth == undefined) this.date_of_birth = new Date()
+        if(this.date_of_death == undefined) this.date_of_death = new Date()
+
         return (this.date_of_death.getYear() - this.date_of_birth.getYear()).toString()
     })
 
