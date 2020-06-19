@@ -180,9 +180,7 @@ exports.genre_update_post = [
         var genre = new Genre({ name: req.body.name, _id:req.params.id })
 
         if(!errors.isEmpty()) {
-        
-            res.render('genre_form', { title: 'Update Genre', genre: genre, errors: errors.array() })
-            
+            res.render('genre_form', { title: 'Update Genre', genre: genre, errors: errors.array() })  
         }
         else {
             // Data from form is valid. Update the record.
