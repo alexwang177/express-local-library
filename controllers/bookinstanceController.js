@@ -1,6 +1,8 @@
 var BookInstance = require('../models/bookinstance');
 var Book = require('../models/book')
 
+var async = require('async')
+
 const { body,validationResult } = require('express-validator/check');
 const { sanitizeBody } = require('express-validator/filter');
 
@@ -30,7 +32,7 @@ exports.bookinstance_detail = function(req, res, next) {
                 return next(err)
             }
 
-            res.render('bookinstance_detail', { title: 'Copy: ' + bookinstance.title, bookinstance: bookinstance })
+            res.render('bookinstance_detail', { title: 'Copy: ' + bookinstance.book.title, bookinstance: bookinstance })
         })
 };
 
@@ -121,11 +123,89 @@ exports.bookinstance_delete_post = function(req, res, next) {
 };
 
 // Display BookInstance update form on GET.
-exports.bookinstance_update_get = function(req, res) {
-    res.send('NOT IMPLEMENTED: BookInstance update GET');
+exports.bookinstance_update_get = function(req, res, next) {
+    // Get books and bookinstance for form
+    async.parallel({
+        bookinstance: function(callback) {
+            BookInstance.findById(req.params.id).populate('book').exec(callback)
+        },
+        book_list: function(callback) {
+            Book.find(callback)
+        },
+    }, function(err, results) {
+        if(err) return next(err)
+
+        if(results.bookinstance == null) {
+            var err = new Error('Book instance not found.')
+            err.status = 404
+            return next(err)
+        }
+
+        // Success
+
+        res.render('bookinstance_form', { title: 'Update Book Instance', book_list: results.book_list, bookinstance: results.bookinstance, selected_book: results.bookinstance.book._id })
+    })
 };
 
 // Handle bookinstance update on POST.
-exports.bookinstance_update_post = function(req, res) {
-    res.send('NOT IMPLEMENTED: BookInstance update POST');
-};
+exports.bookinstance_update_post = [
+    // Validate fields.
+    body('book', 'Book must be specified').trim().isLength({ min: 1 }),
+    body('imprint', 'Imprint must be specified').trim().isLength({ min: 1 }),
+    body('due_back', 'Invalid date').optional({ checkFalsy: true }).isISO8601(),
+
+    // Sanitize fields.
+    sanitizeBody('book').escape(),
+    sanitizeBody('imprint').escape(),
+    sanitizeBody('status').trim().escape(),
+    sanitizeBody('due_back').toDate(),
+
+    // Process request after validation and sanitization
+    (req, res, next) => {
+
+        const errors = validationResult(req)
+
+        // Create a BookInstance object with escaped and trimmed data.
+        var bookinstance = new BookInstance(
+            { book: req.body.book,
+              imprint: req.body.imprint,
+              status: req.body.status,
+              due_back: req.body.due_back,
+              _id: req.params.id
+             })
+
+        if(!errors.isEmpty()) {
+            // There are errors. Render form again with sanitized values/error messages.
+
+            // Get books and bookinstance for form
+            async.parallel({
+                bookinstance: function(callback) {
+                    BookInstance.findById(req.params.id).populate('book').exec(callback)
+                },
+                book_list: function(callback) {
+                    Book.find(callback)
+                },
+            }, function(err, results) {
+                if(err) return next(err)
+
+                if(results.bookinstance == null) {
+                    var err = new Error('Book instance not found.')
+                    err.status = 404
+                    return next(err)
+                }
+
+                // Success
+
+                res.render('bookinstance_form', { title: 'Update Book Instance', book_list: results.book_list, bookinstance: results.bookinstance, selected_book: results.bookinstance.book._id, errors: errors.array() })
+            })
+        }
+        else {
+             // Data from form is valid. Update the record.
+            BookInstance.findByIdAndUpdate(req.params.id, bookinstance, {}, function(err, thebookinstance) {
+                if(err) return next(err)
+
+                res.redirect(thebookinstance.url)
+            })
+        }
+    }
+]
